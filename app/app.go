@@ -196,7 +196,8 @@ var (
 type RootMultiStore interface {
 	storetypes.MultiStore
 
-	LoadLatestVersion() error
+	// LatestVersion returns the latest version in the store
+	LatestVersion() int64
 }
 
 // ChainApp extends an ABCI application, but with most of its parameters exported.
@@ -750,6 +751,11 @@ func New(
 		app.qms = qms.(RootMultiStore)
 	}
 
+	var qmsVersion int64
+	if app.qms != nil {
+		qmsVersion = app.qms.LatestVersion()
+	}
+
 	// initialize BaseApp
 	app.SetInitChainer(app.InitChainer)
 	app.SetPreBlocker(app.PreBlocker)
@@ -788,18 +794,19 @@ func New(
 	// upgrade.
 	app.setPostHandler()
 
-	app.RegisterUpgradeHandlers(app.appCodec)
+	app.RegisterUpgradeHandlers(app.appCodec, qmsVersion)
 
 	if loadLatest {
 		if err := app.LoadLatestVersion(); err != nil {
 			tmos.Exit(err.Error())
 		}
 
-		if app.qms != nil {
-			v1 := app.qms.LatestVersion()
-			v2 := app.LastBlockHeight()
-			if v1 > 0 && v1 != v2 {
-				tmos.Exit(fmt.Sprintf("versiondb latest version %d don't match iavl latest version %d", v1, v2))
+		if qmsVersion > 0 {
+			// it should not happens since we constraint the loaded iavl version to not exceed the versiondb version,
+			// still keep the check for safety.
+			iavlVersion := app.LastBlockHeight()
+			if qmsVersion < iavlVersion {
+				tmos.Exit(fmt.Sprintf("versiondb version %d lag behind iavl version %d", qmsVersion, iavlVersion))
 			}
 		}
 	}

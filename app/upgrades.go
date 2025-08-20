@@ -55,7 +55,7 @@ var CircuitSuperAdmins = map[string][]string{
 	},
 }
 
-func (app *ChainApp) RegisterUpgradeHandlers(cdc codec.BinaryCodec) {
+func (app *ChainApp) RegisterUpgradeHandlers(cdc codec.BinaryCodec, maxVersion int64) {
 	planName := "v6.0.0"
 
 	// Set param key table for params module migration
@@ -172,15 +172,8 @@ func (app *ChainApp) RegisterUpgradeHandlers(cdc codec.BinaryCodec) {
 			Deleted: []string{"icaauth"},
 		}
 		// configure store loader that checks if version == upgradeHeight and applies store upgrades
-		app.SetStoreLoader(upgradetypes.UpgradeStoreLoader(upgradeInfo.Height, &storeUpgrades))
+		app.SetStoreLoader(MaxVersionUpgradeStoreLoader(maxVersion, upgradeInfo.Height, &storeUpgrades))
 	}
-
-	// Dummy upgrade handler for testnet as it has already been upgraded
-	testnetPlanName := "v6.0.0-testnet"
-	app.UpgradeKeeper.SetUpgradeHandler(testnetPlanName, func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
-		// All the module should be at their latest version already, this method should return without doing anything
-		return app.ModuleManager.RunMigrations(ctx, app.configurator, fromVM)
-	})
 }
 
 func UpdateExpeditedParams(ctx context.Context, gov govkeeper.Keeper) error {
@@ -233,4 +226,34 @@ func DurationToDec(d time.Duration) sdkmath.LegacyDec {
 
 func DecToDuration(d sdkmath.LegacyDec) time.Duration {
 	return time.Second * time.Duration(d.RoundInt64())
+}
+
+// MaxVersionStoreLoader will be used when there's versiondb to cap the loaded iavl version
+func MaxVersionStoreLoader(version int64) baseapp.StoreLoader {
+	if version == 0 {
+		return baseapp.DefaultStoreLoader
+	}
+
+	return func(ms storetypes.CommitMultiStore) error {
+		return ms.LoadVersion(version)
+	}
+}
+
+// MaxVersionUpgradeStoreLoader is used to prepare baseapp with a fixed StoreLoader
+func MaxVersionUpgradeStoreLoader(version int64, upgradeHeight int64, storeUpgrades *storetypes.StoreUpgrades) baseapp.StoreLoader {
+	if version == 0 {
+		return upgradetypes.UpgradeStoreLoader(upgradeHeight, storeUpgrades)
+	}
+
+	return func(ms storetypes.CommitMultiStore) error {
+		if upgradeHeight == ms.LastCommitID().Version+1 {
+			// Check if the current commit version and upgrade height matches
+			if len(storeUpgrades.Renamed) > 0 || len(storeUpgrades.Deleted) > 0 || len(storeUpgrades.Added) > 0 {
+				return ms.LoadLatestVersionAndUpgrade(storeUpgrades)
+			}
+		}
+
+		// Otherwise load default store loader
+		return MaxVersionStoreLoader(version)(ms)
+	}
 }
