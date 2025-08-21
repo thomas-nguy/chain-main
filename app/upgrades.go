@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/cometbft/cometbft/libs/log"
 	"slices"
 	"time"
 
@@ -96,6 +97,9 @@ func (app *ChainApp) RegisterUpgradeHandlers(cdc codec.BinaryCodec, maxVersion i
 
 	app.UpgradeKeeper.SetUpgradeHandler(planName, func(ctx context.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
 		sdkCtx := sdk.UnwrapSDKContext(ctx)
+
+		sdkCtx.Logger().Info("Starting upgrading")
+		sdkCtx.Logger().Info("last app hash", "hash", log.NewLazySprintf("%X", app.CommitMultiStore().LastCommitID().Hash))
 
 		// OPTIONAL: prune expired tendermint consensus states to save storage space
 		if _, err := ibctmmigrations.PruneExpiredConsensusStates(sdkCtx, cdc, app.IBCKeeper.ClientKeeper); err != nil {
