@@ -1,49 +1,48 @@
-package app_test
+package app
 
 import (
-	"os"
 	"testing"
 
 	"cosmossdk.io/log"
+	"cosmossdk.io/store/rootmulti"
+	"encoding/hex"
 	dbm "github.com/cosmos/cosmos-db"
-	"github.com/cosmos/cosmos-sdk/baseapp"
-	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
-	"github.com/crypto-org-chain/chain-main/v4/app"
-	"github.com/crypto-org-chain/chain-main/v4/testutil"
+	cronos "github.com/crypto-org-chain/cronos/store/rootmulti"
 	"github.com/stretchr/testify/require"
+	"strings"
 )
 
-func TestExportAppStateAndValidators(t *testing.T) {
-	testCases := []struct {
-		name          string
-		forZeroHeight bool
-	}{
-		{
-			"for zero height",
-			true,
-		},
-		{
-			"for non-zero height",
-			false,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			db := dbm.NewMemDB()
-			chainApp := testutil.SetupWithDB(false, nil, db)
-			chainApp.Commit()
+func TestMemIAVL(t *testing.T) {
+	store := cronos.NewStore("/Users/thomasnguy/Documents/localnet/level-chainmain/new_node/data/memiavl.db", log.NewNopLogger(), true, false)
+	err := store.LoadVersion(500)
+	require.NoError(t, err)
+	hash := store.LastCommitID().Hash
+	//version := store.LatestVersion()
 
-			// Making a new app object with the db, so that initchain hasn't been called
-			chainApp2 := app.New(
-				log.NewLogger(os.Stdout),
-				db,
-				nil,
-				true,
-				simtestutil.NewAppOptionsWithFlagHome(app.DefaultNodeHome),
-				baseapp.SetChainID(testutil.ChainID),
-			)
-			_, err := chainApp2.ExportAppStateAndValidators(false, []string{}, []string{})
-			require.NoError(t, err, "ExportAppStateAndValidators should not have an error")
-		})
-	}
+	//require.Equal(t, 10, version)
+	require.Equal(t, "a", strings.ToUpper(hex.EncodeToString(hash)))
+}
+
+func TestVersionCommitID(t *testing.T) {
+	db, _ := dbm.NewGoLevelDB("application", "/Users/thomasnguy/Documents/localnet/level-chainmain/data/chainmaind/node0/data", nil)
+	store := rootmulti.NewStore(db, log.NewNopLogger(), nil)
+	err := store.LoadVersion(500)
+	require.NoError(t, err)
+	hash := store.LastCommitID().Hash
+	//version := store.LatestVersion()
+
+	//require.Equal(t, 10, version)
+	require.Equal(t, "a", strings.ToUpper(hex.EncodeToString(hash)))
+}
+
+func TestVersionCommitIDNewNode(t *testing.T) {
+	db, _ := dbm.NewGoLevelDB("application", "/Users/thomasnguy/Documents/localnet/level-chainmain/new_node_version/data", nil)
+	store := rootmulti.NewStore(db, log.NewNopLogger(), nil)
+	err := store.LoadVersion(500)
+	require.NoError(t, err)
+	hash := store.LastCommitID().Hash
+	//version := store.LatestVersion()
+
+	//require.Equal(t, 10, version)
+	require.Equal(t, "a", strings.ToUpper(hex.EncodeToString(hash)))
 }
